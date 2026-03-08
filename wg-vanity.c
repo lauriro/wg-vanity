@@ -359,18 +359,6 @@ static void *worker(void *arg) {
 	uint8_t start_priv[32] __attribute__((aligned(8)));
 	fe xs[BATCH], zs[BATCH], acc[BATCH];
 
-	FILE *f = fopen("/dev/urandom", "rb");
-	if (!f) { perror("/dev/urandom"); return NULL; }
-	if (fread(start_priv, 1, 32, f) != 32) { fclose(f); return NULL; }
-	fclose(f);
-	clamp(start_priv);
-
-	mont_ladder(xs[0], zs[0], start_priv);
-
-	uint8_t priv1[32];
-	scalar_add8n(priv1, start_priv, 1);
-	mont_ladder(xs[1], zs[1], priv1);
-
 	/* Precompute step constants for dadd */
 	fe step_x, step_z, step_xpz, step_xmz;
 	{
@@ -380,9 +368,24 @@ static void *worker(void *arg) {
 	fe_add(step_xpz, step_x, step_z);
 	fe_sub(step_xmz, step_x, step_z);
 
-	uint64_t count = 0;
+	FILE *rng = fopen("/dev/urandom", "rb");
+	if (!rng) { perror("/dev/urandom"); return NULL; }
+
+	uint64_t count = 0, offset = 0;
+	int reset = 1;
 
 	while (*w->remaining > 0) {
+		if (reset) {
+			if (fread(start_priv, 1, 32, rng) != 32) { fclose(rng); return NULL; }
+			clamp(start_priv);
+			mont_ladder(xs[0], zs[0], start_priv);
+			uint8_t priv1[32];
+			scalar_add8n(priv1, start_priv, 1);
+			mont_ladder(xs[1], zs[1], priv1);
+			offset = 0;
+			reset = 0;
+		}
+
 		for (int i = 1; i < BATCH - 1; i++)
 			mont_dadd(xs[i+1], zs[i+1], xs[i], zs[i],
 			          xs[i-1], zs[i-1], step_xpz, step_xmz);
@@ -410,7 +413,7 @@ static void *worker(void *arg) {
 
 			uint8_t pub[32], priv[32];
 			fe_tobytes(pub, u);
-			scalar_add8n(priv, start_priv, count + i);
+			scalar_add8n(priv, start_priv, offset + i);
 			char pub_b64[45], priv_b64[45];
 			b64enc(pub_b64, pub, 32);
 			b64enc(priv_b64, priv, 32);
@@ -418,6 +421,9 @@ static void *worker(void *arg) {
 			if (*w->remaining > 0) {
 				printf("%s %s\n", pub_b64, priv_b64);
 				(*w->remaining)--;
+				pthread_mutex_unlock(w->mu);
+				reset = 1;
+				break;
 			}
 			pthread_mutex_unlock(w->mu);
 		}
@@ -426,8 +432,10 @@ static void *worker(void *arg) {
 		          xs[BATCH-2], zs[BATCH-2], step_xpz, step_xmz);
 		mont_dadd(xs[1], zs[1], xs[0], zs[0],
 		          xs[BATCH-1], zs[BATCH-1], step_xpz, step_xmz);
+		offset += BATCH;
 		count += BATCH;
 	}
+	fclose(rng);
 	w->count = count;
 	return NULL;
 }
