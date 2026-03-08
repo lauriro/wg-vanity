@@ -113,12 +113,11 @@ static void fe_tobytes(uint8_t s[32], const fe h_in) {
 	h[0] += 19 * q;
 	fe_reduce(h);
 
-	uint64_t buf[4];
-	buf[0] = h[0] | (h[1] << 51);
-	buf[1] = (h[1] >> 13) | (h[2] << 38);
-	buf[2] = (h[2] >> 26) | (h[3] << 25);
-	buf[3] = (h[3] >> 39) | (h[4] << 12);
-	memcpy(s, buf, 32);
+	uint64_t *out = (uint64_t *)s;
+	out[0] = h[0] | (h[1] << 51);
+	out[1] = (h[1] >> 13) | (h[2] << 38);
+	out[2] = (h[2] >> 26) | (h[3] << 25);
+	out[3] = (h[3] >> 39) | (h[4] << 12);
 }
 
 static void fe_inv(fe r, const fe z) {
