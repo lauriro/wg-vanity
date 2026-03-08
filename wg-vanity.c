@@ -382,6 +382,12 @@ static void *worker(void *arg) {
 			mont_ladder(xs[1], zs[1], priv1);
 			offset = 0;
 			reset = 0;
+		} else {
+			mont_dadd(xs[0], zs[0], xs[BATCH-1], zs[BATCH-1],
+			          xs[BATCH-2], zs[BATCH-2], step_xpz, step_xmz);
+			mont_dadd(xs[1], zs[1], xs[0], zs[0],
+			          xs[BATCH-1], zs[BATCH-1], step_xpz, step_xmz);
+			offset += BATCH;
 		}
 
 		for (int i = 1; i < BATCH - 1; i++)
@@ -427,11 +433,6 @@ static void *worker(void *arg) {
 			pthread_mutex_unlock(w->mu);
 		}
 
-		mont_dadd(xs[0], zs[0], xs[BATCH-1], zs[BATCH-1],
-		          xs[BATCH-2], zs[BATCH-2], step_xpz, step_xmz);
-		mont_dadd(xs[1], zs[1], xs[0], zs[0],
-		          xs[BATCH-1], zs[BATCH-1], step_xpz, step_xmz);
-		offset += BATCH;
 		count += BATCH;
 	}
 	fclose(rng);
