@@ -103,7 +103,6 @@ static void fe_tobytes(uint8_t s[32], const fe h_in) {
 	fe h;
 	fe_copy(h, h_in);
 	fe_reduce(h);
-	fe_reduce(h);
 
 	uint64_t q = (h[0] + 19) >> 51;
 	q = (h[1] + q) >> 51;
@@ -407,6 +406,7 @@ static void *worker(void *arg) {
 				fe_mul(u, xs[0], inv);
 			}
 
+			fe_reduce(u);
 			uint64_t v = __builtin_bswap64(u[0] | (u[1] << 51));
 			if (!prefix_match(&w->pm, v)) continue;
 
